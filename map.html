@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+body {
+    padding: 0;
+    margin: 0;
+    font-family: helvetica, arial, sans-serif;
+  }
+
+div {
+  padding: 50px;
+}
+
+.land {
+  /*fill: #ddd;*/
+  opacity: .5;
+}
+
+.boundary {
+  fill: none;
+  stroke: #333;
+}
+
+.county {
+  fill: none;
+  stroke: #777777;
+  stroke-width: 0.5;
+}
+
+.blockgroup {
+  fill: none;
+  stroke: #fff;
+  opacity: .2;
+  stroke-width: 0.25;
+}
+
+.cityarea {
+  fill: #007AFF;
+  stroke: ##5AC8FA;
+  opacity: .5;
+  stroke-width: 0.5;
+}
+
+.city-label {
+  text-anchor: middle;
+  margin: 0;
+  font-size: 15px;
+  line-height: 14px;
+  text-align: right;
+  color: #000;
+}
+
+.city-marker {
+  fill: #007AFF;
+  stroke: ##5AC8FA;
+  stroke-width: 1;
+}
+
+
+.bbox {
+  stroke: #FD6E70;
+}
+
+.raster {
+    fill: none;
+    opacity: .5;
+  }
+
+</style>
+
+<div>
+  <svg width="900" height="1020" fill="none" stroke-linejoin="round" stroke-linecap="round"></svg>
+</div>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<script src="https://d3js.org/topojson.v1.min.js"></script>
+<script>
+
+var svg = d3.select("svg"),
+    width = +svg.attr("width"),
+    height = +svg.attr("height");
+
+
+d3.json("output.json", function(error, nm) {
+  if (error) throw error;
+
+  //Establish boundaries of features for scale
+  var land = topojson.feature(nm, {
+    type: "GeometryCollection",
+    geometries: nm.objects.counties.geometries.filter(function(d) {
+      return (d.id / 10000 | 0) % 100 !== 99;
+    })
+  });
+
+  var projection = d3.geoMercator();
+
+  var path = d3.geoPath().projection(projection).pointRadius(10);
+
+  var b = path.bounds(land),
+      s = 1 / Math.max((b[1][0] - b[0][0]) / width, (b[1][1] - b[0][1]) / height),
+      t = [(width - s * (b[1][0] + b[0][0])) / 2, (height - s * (b[1][1] + b[0][1])) / 2];
+   
+  // Update the projection to use computed scale & translate.
+  projection.scale(s).translate(t).fitExtent([[0, 0], [width, height]], land);
+
+  var raster_width = (b[1][0] - b[0][0]) * s;
+  var raster_height = (b[1][1] - b[0][1]) * s;
+
+  var rtranslate_x = (width - raster_width) / 2;
+  var rtranslate_y = (height - raster_height) / 2;
+
+  // Shaded relief map
+  svg.append("image")
+      .attr('id', 'Raster')
+      .attr("xlink:href", "nm-1340.png")
+      .attr("class", "raster")
+      .attr("width", raster_width)
+      .attr("height", raster_height)
+      .attr("transform",
+          "translate(" + rtranslate_x + ", " + rtranslate_y + ")");
+
+  svg.append("path")
+    .datum(topojson.feature(nm, nm.objects.cityarea))
+    .attr("class", "cityarea")
+    .attr("d", path);
+
+  svg.append("path")
+      .datum(topojson.feature(nm, nm.objects.boundary))
+      .attr("class", "boundary")
+      .attr("d", path);
+
+  // svg.append("path")
+  //   .datum(topojson.feature(nm, nm.objects.blockgroup))
+  //   .attr("class", "blockgroup")
+  //   .attr("d", path);
+
+  svg.append("path")
+      .datum(topojson.mesh(nm, nm.objects.counties, function(a, b) { return a !== b; }))
+      .attr("class", "county")
+      .attr("d", path);
+
+  // Draw city markers
+  svg.append('g')
+      .attr('id', 'CityMarkers')
+      .selectAll("circle")
+      .data(topojson.feature(nm, nm.objects.cities).features)
+      .enter().append("circle")
+      .attr("class", "city-marker")
+      .attr('r', '3px')
+      .attr("transform", function(d) { return "translate(" + projection(d.geometry.coordinates) + ")"; });
+
+  // Write city label text
+  svg.append('g').attr('id', 'CityLabels').selectAll('.city-label')
+      .data(topojson.feature(nm, nm.objects.cities).features)
+      .enter().append('text')
+      .attr("class", "city-label")
+      .each(function(d) {
+        d3.select(this)
+          .attr("transform", function(d) { return "translate(" + projection(d.geometry.coordinates) + ")"; })
+          .attr("dx", "5")
+          .attr("dy", "15")
+          .style("text-anchor", "start")
+          .text(function(d) { return d.properties.NAME; });
+      });
+
+  // svg.append("path")
+  //     .datum(topojson.feature(nm, nm.objects.cities))
+  //     .attr("class", "points")
+  //     .attr("d", path);
+
+  // console.log(nm.objects.cities);
+
+  // svg.selectAll(".place-label")
+  //     .data(topojson.feature(nm, nm.objects.cities).features)
+  //     .enter().append("text")
+  //     .attr("class", "place-label")
+  //     .attr("transform", function(d) { return "translate(" + projection(d.geometry.coordinates) + ")"; })
+  //     .attr("dy", ".35em")
+  //     .text(function(d) { return d.properties.NAME; });
+
+});//end d3.json("output.json")
+
+
+</script>
